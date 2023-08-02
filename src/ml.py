@@ -1,7 +1,8 @@
+import os
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 import numpy as np
 import pickle
 import tensorflow
-# import random
 from tensorflow.keras.layers import Conv2D, MaxPooling2D, AveragePooling2D, Activation
 from tensorflow.keras.layers import Dense, BatchNormalization, Flatten
 from tensorflow.keras.models import Sequential, load_model, clone_model
@@ -26,12 +27,13 @@ def load_file(filename) -> np.ndarray:
 
 def load_all_file(client_name) -> tuple:
     common_path = "data/CIFER/"
+    n = 1000
     X_train = load_file(f"{common_path}/{client_name}/trainx.pyp")
     y_train = load_file(f"{common_path}/{client_name}/trainy.pyp")
     X_test = load_file(f"{common_path}/{client_name}/testx.pyp")
     y_test = load_file(f"{common_path}/{client_name}/testy.pyp")
 
-    return X_train, y_train, X_test, y_test
+    return X_train[:n], y_train[:n], X_test, y_test
 
 
 def create_model(input_shape=(32, 32, 3), dimension='VGG11'):
@@ -65,22 +67,29 @@ def create_model(input_shape=(32, 32, 3), dimension='VGG11'):
     return model
 
 
-def average_model(model1, model2):
+def average_model(models: list):
     # Create a new model with the same architecture
-    model_avg = clone_model(model1)
-    model_avg.build(model1.input_shape)  # Build the model so that it's ready for weights
+    model_avg = clone_model(models[0])
+    model_avg.build(models[0].input_shape)  # Build the model so that it's ready for weights
 
-    # Get the weights from both models
-    weights1 = model1.get_weights()
-    weights2 = model2.get_weights()
+    # Get the weights from all models
+    weights = [models[0].get_weights()]
+    for i, model in enumerate(models):
+        if i == 0:
+            pass
+        weight = model.get_weights()
+        assert len(weights[i-1]) == len(weight)
+        weights.append(weight)
 
-    # Ensure the two models are compatible (i.e., have the same number and shapes of weights)
-    assert len(weights1) == len(weights2)
-    for i in range(len(weights1)):
-        assert weights1[i].shape == weights2[i].shape
+        # Ensure the two models are compatible (i.e., have the same number and shapes of weights)
+        for j in range(len(weights)):
+            assert weights[i - 1][j].shape == weight[j].shape
 
-    # Average the weights
-    avg_weights = [(w1 + w2) / 2.0 for w1, w2 in zip(weights1, weights2)]
+    # Calculate the sum of the weights
+    sum_weights = [sum(w) for w in zip(*weights)]
+
+    # Calculate the average of the weights
+    avg_weights = [w_sum / len(weights) for w_sum in sum_weights]
 
     # Set the weights to the new model
     model_avg.set_weights(avg_weights)
@@ -103,7 +112,7 @@ if __name__ == "__main__":
     # model = create_model()
     model1 = load_model(f"{common.PARENT_PATH}/models/CIFER/client1.keras")
     model2 = load_model(f"{common.PARENT_PATH}/models/CIFER/client2.keras")
-    model = average_model(model1, model2)
+    model = average_model([model1, model2])
 
     # Train the model
     history = model.fit(
@@ -119,4 +128,4 @@ if __name__ == "__main__":
     print('Test loss:', score[0])
     print('Test accuracy:', score[1])
 
-    model.save(f"{common.PARENT_PATH}/models/CIFER/{client}.keras")
+    model.save(f"{common.PARENT_PATH}/models/CIFER/updated.keras")
