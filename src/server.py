@@ -8,10 +8,9 @@ import common as cm
 import ml
 
 
-CLIENT_INDEX = {
-    "client1": 0,
-    "client2": 1
-}
+CLIENT_INDEX = {}
+for i in range(cm.CONFIG["parties"]):
+    CLIENT_INDEX[f"client{i + 1}"] = i
 
 
 class Server:
@@ -19,7 +18,7 @@ class Server:
         self.client_count = 0
         self.party = len(CLIENT_INDEX)
         self.this_round = 0
-        self.rounds = 2
+        self.rounds = cm.CONFIG["rounds"]
         self.clients = []
         self.lock = threading.Lock()
         self.num_sent_init = 0
@@ -53,7 +52,7 @@ class Server:
 
                 if self.num_sent_init > 1:
                     # Sending the location of the init model
-                    print("Sending the init model")
+                    print(f"Sending the init model ({self.central_model_path})")
                     msg = f"{self.central_model_path}\n"
                     client_socket.send(msg.encode())
 
@@ -67,12 +66,6 @@ class Server:
             request = request.decode('utf-8')
             print(f"Received from {client}: {request}")
 
-            if not all(self.updated) and self.this_round != 0:
-                print(f"Sending the aggregated model ({self.central_model_path})")
-                print(self.waitings, self.updated)
-                msg = f"{self.central_model_path}\n"
-                client_socket.send(msg.encode())
-
             # when a client finishes its training
             if "path" in request:
                 path, acc = request.split("acc: ")
@@ -83,6 +76,13 @@ class Server:
                 self.updated[CLIENT_INDEX[client]] = True
                 self.waitings -= 1
 
+            # when a client just asks a aggregated model
+            elif not all(self.updated) and self.this_round != 0:
+                print(f"Sending the aggregated model ({self.central_model_path})")
+                msg = f"{self.central_model_path}\n"
+                client_socket.send(msg.encode())
+
+            # When all parties send their trained models
             if all(self.updated):
                 for i in range(self.party):
                     self.models[i] = ml.load_model(f"{cm.PARENT_PATH}/models/CIFER/client{i+1}.keras")
@@ -100,10 +100,10 @@ class Server:
             cs.close()
 
         print("FML is done! Thanks!")
-        os._exit(0)
-        with self.lock:
-            self.client_count -= 1
-            print(f"Number of clients: {self.client_count}")
+        os._exit(0)  # TODO: idealy, hendle each thread
+        # with self.lock:
+        #     self.client_count -= 1
+        #     print(f"Number of clients: {self.client_count}")
 
     def server_program(self):
         host = cm.CONFIG["host"]

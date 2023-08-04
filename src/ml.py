@@ -5,18 +5,14 @@ import numpy as np
 import pickle
 import logging
 import warnings
+from sklearn.utils import shuffle
 from tensorflow.keras.layers import Conv2D, MaxPooling2D, AveragePooling2D, Activation
 from tensorflow.keras.layers import Dense, BatchNormalization, Flatten
 from tensorflow.keras.models import Sequential, load_model, clone_model
 from tensorflow.keras import activations
-
 import tensorflow as tf  
 tf.get_logger().setLevel(logging.ERROR)
-
 warnings.filterwarnings('ignore')
-
-
-
 
 import common
 
@@ -35,13 +31,14 @@ def load_file(filename) -> np.ndarray:
     return data
 
 
-def load_all_file(client_name) -> tuple:
+def load_all_files(client_name) -> tuple:
     common_path = "data/CIFER/"
-    n = 300
+    n = common.CONFIG["n"]
     X_train = load_file(f"{common_path}/{client_name}/trainx.pyp")
     y_train = load_file(f"{common_path}/{client_name}/trainy.pyp")
     X_test = load_file(f"{common_path}/{client_name}/testx.pyp")
     y_test = load_file(f"{common_path}/{client_name}/testy.pyp")
+    X_train, y_train = shuffle(X_train, y_train, random_state=0)
 
     return X_train[:n], y_train[:n], X_test, y_test
 
@@ -88,11 +85,11 @@ def average_model(models: list):
         if i == 0:
             pass
         weight = model.get_weights()
-        assert len(weights[i-1]) == len(weight)
+        assert len(weights[i - 1]) == len(weight)
         weights.append(weight)
 
         # Ensure the two models are compatible (i.e., have the same number and shapes of weights)
-        for j in range(len(weights)):
+        for j in range(len(weight)):
             assert weights[i - 1][j].shape == weight[j].shape
 
     # Calculate the sum of the weights
@@ -117,7 +114,7 @@ def average_model(models: list):
 
 if __name__ == "__main__":
     client = "client2"
-    X_train, y_train, X_test, y_test = load_all_file(client)
+    X_train, y_train, X_test, y_test = load_all_files(client)
 
     # model = create_model()
     model1 = load_model(f"{common.PARENT_PATH}/models/CIFER/client1.keras")

@@ -19,7 +19,7 @@ def client_program():
         print(f'Received from server: {data}')  # show in terminal
 
         if any(model in data for model in ["init.keras", "updated.keras"]):
-            X_train, y_train, X_test, y_test = ml.load_all_file(client_name)
+            X_train, y_train, X_test, y_test = ml.load_all_files(client_name)
             model = ml.load_model(f"{cm.PARENT_PATH}/{data}")
             model.fit(
                 X_train,

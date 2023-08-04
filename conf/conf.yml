@@ -1,2 +1,5 @@
 host: localhost
 port: 12345
+rounds: 3
+parties: 2
+n: 500
