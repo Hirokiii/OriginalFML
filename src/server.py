@@ -1,5 +1,7 @@
+import os
 import socket
 import threading
+
 import numpy as np
 
 import common as cm
@@ -26,27 +28,37 @@ class Server:
         self.updated = [False] * self.party
         self.updated_path = [""] * self.party
         self.models = [None] * self.party
+        self.central_model_path = None
 
     def handle_client(self, client_socket, client):
         with self.lock:
             self.client_count += 1
             print(f"Number of clients: {self.client_count}")
+            self.clients.append(client_socket)
 
         while True:
+            # Finish learning
+            if self.this_round == self.rounds:
+                break
+
             print(f"Round: {self.this_round}/{self.rounds}")
             # when all parties are lined up
             if self.client_count == self.party and self.num_sent_init <= (self.party + 1):
-                path = "models/CIFER/init.keras"
+                self.central_model_path = "models/CIFER/init.keras"
                 if self.num_sent_init == 0:
                     model = ml.create_model()
-                    model.save(f"{cm.PARENT_PATH}/{path}")
+                    model.save(f"{cm.PARENT_PATH}/{self.central_model_path}")
                     self.num_sent_init += 1
                     continue
 
-                print("Sending the init model")
-                client_socket.send(path.encode())
+                if self.num_sent_init > 1:
+                    # Sending the location of the init model
+                    print("Sending the init model")
+                    msg = f"{self.central_model_path}\n"
+                    client_socket.send(msg.encode())
+
                 self.num_sent_init += 1
-                self.waitings = 2
+                self.waitings = self.party
 
             request = client_socket.recv(1024)
             if not request:
@@ -55,11 +67,17 @@ class Server:
             request = request.decode('utf-8')
             print(f"Received from {client}: {request}")
 
+            if not all(self.updated) and self.this_round != 0:
+                print(f"Sending the aggregated model ({self.central_model_path})")
+                print(self.waitings, self.updated)
+                msg = f"{self.central_model_path}\n"
+                client_socket.send(msg.encode())
+
             # when a client finishes its training
             if "path" in request:
                 path, acc = request.split("acc: ")
                 path = path.split(": ")[1]
-                self.accuracies[self.this_round, CLIENT_INDEX[client]] = acc
+                self.accuracies[self.this_round, CLIENT_INDEX[client]] = float(acc)
                 print(self.accuracies)
                 self.updated_path[CLIENT_INDEX[client]] = path
                 self.updated[CLIENT_INDEX[client]] = True
@@ -69,16 +87,20 @@ class Server:
                 for i in range(self.party):
                     self.models[i] = ml.load_model(f"{cm.PARENT_PATH}/models/CIFER/client{i+1}.keras")
                 model = ml.average_model(self.models)
-                path = "models/CIFER/updated.keras"
-                model.save(f"{cm.PARENT_PATH}/{path}")
+                self.central_model_path = "models/CIFER/updated.keras"
+                model.save(f"{cm.PARENT_PATH}/{self.central_model_path}")
                 self.updated = [False] * self.party
+                self.waitings = self.party
+                self.this_round += 1
                 print("The central model is updated.")
 
-            if self.waitings == 0:
-                self.this_round += 1
+        print("Going to close the client sockets")
+        for cs in self.clients:
+            cs.send(b"Finished Federated Learning. Thanks!\n")
+            cs.close()
 
-        client_socket.close()
-
+        print("FML is done! Thanks!")
+        os._exit(0)
         with self.lock:
             self.client_count -= 1
             print(f"Number of clients: {self.client_count}")
@@ -94,7 +116,6 @@ class Server:
         while True:
             client_sock, address = server.accept()
             print(f"Accepted connection from {address[0]}:{address[1]}")
-            self.clients.append({f"client{self.client_count + 1}": {"host": address[0], "port": address[1]}})
 
             # spin up new thread to handle this client
             client_handler = threading.Thread(target=self.handle_client, args=(client_sock, f"client{self.client_count + 1}"))

@@ -1,12 +1,22 @@
 import os
-os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'  # noqa: E402
+
 import numpy as np
 import pickle
-import tensorflow
+import logging
+import warnings
 from tensorflow.keras.layers import Conv2D, MaxPooling2D, AveragePooling2D, Activation
 from tensorflow.keras.layers import Dense, BatchNormalization, Flatten
 from tensorflow.keras.models import Sequential, load_model, clone_model
 from tensorflow.keras import activations
+
+import tensorflow as tf  
+tf.get_logger().setLevel(logging.ERROR)
+
+warnings.filterwarnings('ignore')
+
+
+
 
 import common
 
@@ -27,7 +37,7 @@ def load_file(filename) -> np.ndarray:
 
 def load_all_file(client_name) -> tuple:
     common_path = "data/CIFER/"
-    n = 1000
+    n = 300
     X_train = load_file(f"{common_path}/{client_name}/trainx.pyp")
     y_train = load_file(f"{common_path}/{client_name}/trainy.pyp")
     X_test = load_file(f"{common_path}/{client_name}/testx.pyp")
@@ -39,7 +49,7 @@ def load_all_file(client_name) -> tuple:
 def create_model(input_shape=(32, 32, 3), dimension='VGG11'):
     num_classes = 10
     model = Sequential()
-    model.add(tensorflow.keras.Input(shape=input_shape))
+    model.add(tf.keras.Input(shape=input_shape))
 
     for x in cfg[dimension]:
         if x == 'M':
@@ -54,7 +64,7 @@ def create_model(input_shape=(32, 32, 3), dimension='VGG11'):
     model.add(AveragePooling2D(pool_size=(1, 1)))
     model.add(Flatten())
     model.add(Dense(num_classes, activation='softmax'))
-    opt = tensorflow.keras.optimizers.Adam(learning_rate=0.001)
+    opt = tf.keras.optimizers.Adam(learning_rate=0.001)
     model.compile(
         loss='categorical_crossentropy',
         optimizer=opt,
@@ -95,7 +105,7 @@ def average_model(models: list):
     model_avg.set_weights(avg_weights)
 
     # Compile it
-    opt = tensorflow.keras.optimizers.Adam(learning_rate=0.001)
+    opt = tf.keras.optimizers.Adam(learning_rate=0.001)
     model_avg.compile(
         loss='categorical_crossentropy',
         optimizer=opt,

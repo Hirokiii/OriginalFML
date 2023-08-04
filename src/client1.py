@@ -15,12 +15,12 @@ def client_program():
         if message.lower().strip() == 'bye':
             break
         client.send(message.encode())  # send message
-        data = client.recv(1024)  # receive response
-        print('Received from server: ' + data.decode())  # show in terminal
+        data = client.recv(1024).decode().split("\n")[-2]  # receive response
+        print(f'Received from server: {data}')  # show in terminal
 
-        if "init.keras" in data.decode():
+        if any(model in data for model in ["init.keras", "updated.keras"]):
             X_train, y_train, X_test, y_test = ml.load_all_file(client_name)
-            model = ml.load_model(f"{cm.PARENT_PATH}/{data.decode()}")
+            model = ml.load_model(f"{cm.PARENT_PATH}/{data}")
             model.fit(
                 X_train,
                 y_train,
@@ -36,6 +36,9 @@ def client_program():
 
             msg = f"path: {path}, acc: {score[1]}"
             client.send(msg.encode())
+
+        if "Thanks" in data:
+            break
 
     client.close()  # close the connection
 
